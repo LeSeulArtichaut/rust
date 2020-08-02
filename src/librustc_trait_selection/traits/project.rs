@@ -323,7 +323,7 @@ impl<'a, 'b, 'tcx> TypeFolder<'tcx> for AssocTypeNormalizer<'a, 'b, 'tcx> {
         // should occur eventually).
 
         let ty = ty.super_fold_with(self);
-        match ty.kind {
+        match *ty.kind() {
             ty::Opaque(def_id, substs) if !substs.has_escaping_bound_vars() => {
                 // (*)
                 // Only normalize `impl Trait` after type-checking, usually in codegen.
@@ -897,7 +897,7 @@ fn assemble_candidates_from_trait_def<'cx, 'tcx>(
     let tcx = selcx.tcx();
     // Check whether the self-type is itself a projection.
     // If so, extract what we know from the trait and try to come up with a good answer.
-    let bounds = match obligation_trait_ref.self_ty().kind {
+    let bounds = match *obligation_trait_ref.self_ty().kind() {
         ty::Projection(ref data) => {
             tcx.projection_predicates(data.item_def_id).subst(tcx, data.substs)
         }
@@ -1056,7 +1056,7 @@ fn assemble_candidates_from_impls<'cx, 'tcx>(
                 // Any type with multiple potential discriminant types is therefore not eligible.
                 let self_ty = selcx.infcx().shallow_resolve(obligation.predicate.self_ty());
 
-                match self_ty.kind {
+                match self_ty.kind() {
                     ty::Bool
                     | ty::Char
                     | ty::Int(_)
@@ -1208,8 +1208,8 @@ fn confirm_object_candidate<'cx, 'tcx>(
     let self_ty = obligation_trait_ref.self_ty();
     let object_ty = selcx.infcx().shallow_resolve(self_ty);
     debug!("confirm_object_candidate(object_ty={:?})", object_ty);
-    let data = match object_ty.kind {
-        ty::Dynamic(ref data, ..) => data,
+    let data = match object_ty.kind() {
+        ty::Dynamic(data, ..) => data,
         _ => span_bug!(
             obligation.cause.span,
             "confirm_object_candidate called with non-object: {:?}",

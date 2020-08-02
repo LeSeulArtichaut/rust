@@ -326,7 +326,7 @@ pub(super) fn type_of(tcx: TyCtxt<'_>, def_id: DefId) -> Ty<'_> {
             GenericParamKind::Type { default: Some(ref ty), .. } => icx.to_ty(ty),
             GenericParamKind::Const { ty: ref hir_ty, .. } => {
                 let ty = icx.to_ty(hir_ty);
-                let err = match ty.peel_refs().kind {
+                let err = match ty.peel_refs().kind() {
                     ty::FnPtr(_) => Some("function pointers"),
                     ty::RawPtr(_) => Some("raw pointers"),
                     _ => None,
@@ -348,7 +348,7 @@ pub(super) fn type_of(tcx: TyCtxt<'_>, def_id: DefId) -> Ty<'_> {
                     // We use the same error code in both branches, because this is really the same
                     // issue: we just special-case the message for type parameters to make it
                     // clearer.
-                    if let ty::Param(_) = ty.peel_refs().kind {
+                    if let ty::Param(_) = ty.peel_refs().kind() {
                         // Const parameters may not have type parameters as their types,
                         // because we cannot be sure that the type parameter derives `PartialEq`
                         // and `Eq` (just implementing them is not enough for `structural_match`).
@@ -445,7 +445,7 @@ fn find_opaque_ty_constraints(tcx: TyCtxt<'_>, def_id: LocalDefId) -> Ty<'_> {
                 let mut used_params: FxHashSet<_> = FxHashSet::default();
                 for (i, arg) in substs.iter().enumerate() {
                     let arg_is_param = match arg.unpack() {
-                        GenericArgKind::Type(ty) => matches!(ty.kind, ty::Param(_)),
+                        GenericArgKind::Type(ty) => matches!(ty.kind(), ty::Param(_)),
                         GenericArgKind::Lifetime(lt) => {
                             matches!(lt, ty::ReEarlyBound(_) | ty::ReFree(_))
                         }
@@ -670,7 +670,7 @@ fn infer_placeholder_type(
         }
         None => {
             let mut diag = bad_placeholder_type(tcx, vec![span]);
-            if !matches!(ty.kind, ty::Error(_)) {
+            if !matches!(ty.kind(), ty::Error(_)) {
                 diag.span_suggestion(
                     span,
                     "replace `_` with the correct type",
