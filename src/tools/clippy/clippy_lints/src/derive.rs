@@ -187,20 +187,20 @@ fn check_copy_clone<'tcx>(cx: &LateContext<'tcx>, item: &Item<'_>, trait_ref: &T
             return;
         }
 
-        match ty.kind {
+        match *ty.kind() {
             ty::Adt(def, _) if def.is_union() => return,
 
             // Some types are not Clone by default but could be cloned “by hand” if necessary
             ty::Adt(def, substs) => {
                 for variant in &def.variants {
                     for field in &variant.fields {
-                        if let ty::FnDef(..) = field.ty(cx.tcx, substs).kind {
+                        if let ty::FnDef(..) = field.ty(cx.tcx, substs).kind() {
                             return;
                         }
                     }
                     for subst in substs {
                         if let ty::subst::GenericArgKind::Type(subst) = subst.unpack() {
-                            if let ty::Param(_) = subst.kind {
+                            if let ty::Param(_) = subst.kind() {
                                 return;
                             }
                         }
@@ -241,7 +241,7 @@ fn check_unsafe_derive_deserialize<'tcx>(
 
     if_chain! {
         if match_path(&trait_ref.path, &paths::SERDE_DESERIALIZE);
-        if let ty::Adt(def, _) = ty.kind;
+        if let ty::Adt(def, _) = ty.kind();
         if def.did.is_local();
         if cx.tcx.inherent_impls(def.did)
             .iter()
