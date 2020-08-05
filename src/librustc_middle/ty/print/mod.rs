@@ -232,7 +232,7 @@ pub trait Printer<'tcx>: Sized {
         // users may find it useful. Currently, we omit the parent if
         // the impl is either in the same module as the self-type or
         // as the trait.
-        let in_self_mod = match characteristic_def_id_of_type(self_ty) {
+        let in_self_mod = match characteristic_def_id_of_type(self.tcx(), self_ty) {
             None => false,
             Some(ty_def_id) => self.tcx().parent(ty_def_id) == Some(parent_def_id),
         };
@@ -265,20 +265,20 @@ pub trait Printer<'tcx>: Sized {
 /// function tries to find a "characteristic `DefId`" for a
 /// type. It's just a heuristic so it makes some questionable
 /// decisions and we may want to adjust it later.
-pub fn characteristic_def_id_of_type(ty: Ty<'_>) -> Option<DefId> {
-    match *ty.kind() {
+pub fn characteristic_def_id_of_type(tcx: TyCtxt<'tcx>, ty: Ty<'_>) -> Option<DefId> {
+    match *ty.kind(tcx) {
         ty::Adt(adt_def, _) => Some(adt_def.did),
 
         ty::Dynamic(data, ..) => data.principal_def_id(),
 
-        ty::Array(subty, _) | ty::Slice(subty) => characteristic_def_id_of_type(subty),
+        ty::Array(subty, _) | ty::Slice(subty) => characteristic_def_id_of_type(tcx, subty),
 
-        ty::RawPtr(mt) => characteristic_def_id_of_type(mt.ty),
+        ty::RawPtr(mt) => characteristic_def_id_of_type(tcx, mt.ty),
 
-        ty::Ref(_, ty, _) => characteristic_def_id_of_type(ty),
+        ty::Ref(_, ty, _) => characteristic_def_id_of_type(tcx, ty),
 
         ty::Tuple(ref tys) => {
-            tys.iter().find_map(|ty| characteristic_def_id_of_type(ty.expect_ty()))
+            tys.iter().find_map(|ty| characteristic_def_id_of_type(tcx, ty.expect_ty()))
         }
 
         ty::FnDef(def_id, _)

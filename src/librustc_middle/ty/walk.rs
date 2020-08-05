@@ -1,7 +1,7 @@
 //! An iterator over the type substructure.
 //! WARNING: this does not keep track of the region depth.
 
-use crate::ty;
+use crate::ty::{self, TyCtxt};
 use crate::ty::subst::{GenericArg, GenericArgKind};
 use smallvec::{self, SmallVec};
 
@@ -10,13 +10,14 @@ use smallvec::{self, SmallVec};
 type TypeWalkerStack<'tcx> = SmallVec<[GenericArg<'tcx>; 8]>;
 
 pub struct TypeWalker<'tcx> {
+    tcx: TyCtxt<'tcx>,
     stack: TypeWalkerStack<'tcx>,
     last_subtree: usize,
 }
 
 impl<'tcx> TypeWalker<'tcx> {
-    pub fn new(root: GenericArg<'tcx>) -> TypeWalker<'tcx> {
-        TypeWalker { stack: smallvec![root], last_subtree: 1 }
+    pub fn new(tcx: TyCtxt<'tcx>, root: GenericArg<'tcx>) -> TypeWalker<'tcx> {
+        TypeWalker { tcx, stack: smallvec![root], last_subtree: 1 }
     }
 
     /// Skips the subtree corresponding to the last type
@@ -43,7 +44,7 @@ impl<'tcx> Iterator for TypeWalker<'tcx> {
         debug!("next(): stack={:?}", self.stack);
         let next = self.stack.pop()?;
         self.last_subtree = self.stack.len();
-        push_inner(&mut self.stack, next);
+        push_inner(self.tcx, &mut self.stack, next);
         debug!("next: stack={:?}", self.stack);
         Some(next)
     }
@@ -60,16 +61,16 @@ impl GenericArg<'tcx> {
     /// Foo<Bar<isize>> => { Foo<Bar<isize>>, Bar<isize>, isize }
     /// [isize] => { [isize], isize }
     /// ```
-    pub fn walk(self) -> TypeWalker<'tcx> {
-        TypeWalker::new(self)
+    pub fn walk(self, tcx: TyCtxt<'tcx>) -> TypeWalker<'tcx> {
+        TypeWalker::new(tcx, self)
     }
 
     /// Iterator that walks the immediate children of `self`. Hence
     /// `Foo<Bar<i32>, u32>` yields the sequence `[Bar<i32>, u32]`
     /// (but not `i32`, like `walk`).
-    pub fn walk_shallow(self) -> impl Iterator<Item = GenericArg<'tcx>> {
+    pub fn walk_shallow(self, tcx: TyCtxt<'tcx>) -> impl Iterator<Item = GenericArg<'tcx>> {
         let mut stack = SmallVec::new();
-        push_inner(&mut stack, self);
+        push_inner(tcx, &mut stack, self);
         stack.into_iter()
     }
 }
@@ -85,8 +86,8 @@ impl<'tcx> super::TyS<'tcx> {
     /// Foo<Bar<isize>> => { Foo<Bar<isize>>, Bar<isize>, isize }
     /// [isize] => { [isize], isize }
     /// ```
-    pub fn walk(&'tcx self) -> TypeWalker<'tcx> {
-        TypeWalker::new(self.into())
+    pub fn walk(&'tcx self, tcx: TyCtxt<'tcx>) -> TypeWalker<'tcx> {
+        TypeWalker::new(tcx, self.into())
     }
 }
 
@@ -96,9 +97,9 @@ impl<'tcx> super::TyS<'tcx> {
 // known to be significant to any code, but it seems like the
 // natural order one would expect (basically, the order of the
 // types as they are written).
-fn push_inner<'tcx>(stack: &mut TypeWalkerStack<'tcx>, parent: GenericArg<'tcx>) {
+fn push_inner<'tcx>(tcx: TyCtxt<'tcx>, stack: &mut TypeWalkerStack<'tcx>, parent: GenericArg<'tcx>) {
     match parent.unpack() {
-        GenericArgKind::Type(parent_ty) => match *parent_ty.kind() {
+        GenericArgKind::Type(parent_ty) => match *parent_ty.kind(tcx) {
             ty::Bool
             | ty::Char
             | ty::Int(_)

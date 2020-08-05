@@ -741,7 +741,7 @@ pub type CanonicalUserType<'tcx> = Canonical<'tcx, UserType<'tcx>>;
 impl CanonicalUserType<'tcx> {
     /// Returns `true` if this represents a substitution of the form `[?0, ?1, ?2]`,
     /// i.e., each thing is mapped to a canonical variable with the same index.
-    pub fn is_identity(&self) -> bool {
+    pub fn is_identity(&self, tcx: TyCtxt<'tcx>) -> bool {
         match self.value {
             UserType::Ty(_) => false,
             UserType::TypeOf(_, user_substs) => {
@@ -751,7 +751,7 @@ impl CanonicalUserType<'tcx> {
 
                 user_substs.substs.iter().zip(BoundVar::new(0)..).all(|(kind, cvar)| {
                     match kind.unpack() {
-                        GenericArgKind::Type(ty) => match ty.kind() {
+                        GenericArgKind::Type(ty) => match ty.kind(tcx) {
                             ty::Bound(debruijn, b) => {
                                 // We only allow a `ty::INNERMOST` index in substitutions.
                                 assert_eq!(*debruijn, ty::INNERMOST);
@@ -1482,7 +1482,7 @@ impl<'tcx> TyCtxt<'tcx> {
         v.0
     }
 
-    pub fn return_type_impl_trait(&self, scope_def_id: LocalDefId) -> Option<(Ty<'tcx>, Span)> {
+    pub fn return_type_impl_trait(&self, tcx: TyCtxt<'tcx>, scope_def_id: LocalDefId) -> Option<(Ty<'tcx>, Span)> {
         // HACK: `type_of_def_id()` will fail on these (#55796), so return `None`.
         let hir_id = self.hir().as_local_hir_id(scope_def_id);
         match self.hir().get(hir_id) {
@@ -1498,11 +1498,11 @@ impl<'tcx> TyCtxt<'tcx> {
         }
 
         let ret_ty = self.type_of(scope_def_id);
-        match ret_ty.kind() {
+        match ret_ty.kind(tcx) {
             ty::FnDef(_, _) => {
                 let sig = ret_ty.fn_sig(*self);
                 let output = self.erase_late_bound_regions(&sig.output());
-                if output.is_impl_trait() {
+                if output.is_impl_trait(tcx) {
                     let fn_decl = self.hir().fn_decl_by_hir_id(hir_id).unwrap();
                     Some((output, fn_decl.output.span()))
                 } else {
@@ -1822,7 +1822,7 @@ macro_rules! sty_debug_print {
                 let shards = tcx.interners.type_.lock_shards();
                 let types = shards.iter().flat_map(|shard| shard.keys());
                 for &Interned(t) in types {
-                    let variant = match t.kind() {
+                    let variant = match t.kind(tcx) {
                         ty::Bool | ty::Char | ty::Int(..) | ty::Uint(..) |
                             ty::Float(..) | ty::Str | ty::Never => continue,
                         ty::Error(_) => /* unimportant */ continue,
@@ -2082,11 +2082,12 @@ impl<'tcx> TyCtxt<'tcx> {
     /// It cannot convert a closure that requires unsafe.
     pub fn signature_unclosure(
         self,
+        tcx: TyCtxt<'tcx>,
         sig: PolyFnSig<'tcx>,
         unsafety: hir::Unsafety,
     ) -> PolyFnSig<'tcx> {
         sig.map_bound(|s| {
-            let params_iter = match s.inputs()[0].kind() {
+            let params_iter = match s.inputs()[0].kind(tcx) {
                 ty::Tuple(params) => params.into_iter().map(|k| k.expect_ty()),
                 _ => bug!(),
             };
